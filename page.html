@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Spatial Audio Controller</title>
+    <style>
+        body {
+            margin: 0;
+            background: #1a1a1a;
+            color: white;
+            font-family: sans-serif;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            background: #222;
+            cursor: crosshair;
+        }
+
+        #status {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            pointer-events: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="status">WebSocket: Connecting...</div>
+    <canvas id="stage"></canvas>
+
+    <script>
+        const canvas = document.getElementById('stage');
+        const ctx = canvas.getContext('2d');
+        const status = document.getElementById('status');
+
+        // Configuration
+        const objectives = [
+            { id: "Obj_A", x: 200, y: 150, color: '#3498db', label: 'Objective A' },
+            { id: "Obj_B", x: 600, y: 150, color: '#e74c3c', label: 'Objective B' },
+            { id: "Obj_C", x: 200, y: 450, color: '#f1c40f', label: 'Objective C' },
+            { id: "Obj_D", x: 600, y: 450, color: '#2ecc71', label: 'Objective D' }
+        ];
+
+        let mouse = { x: 0, y: 0 };
+        let socket = new WebSocket('ws://localhost:8765');
+
+        // Handle Canvas Sizing
+        window.onresize = () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        };
+        window.onresize();
+
+        // Track Mouse
+        canvas.addEventListener('mousemove', (e) => {
+            mouse.x = e.clientX;
+            mouse.y = e.clientY;
+        });
+
+        socket.onopen = () => { status.innerText = "WebSocket: Connected"; };
+        socket.onclose = () => { status.innerText = "WebSocket: Disconnected"; };
+
+        function update() {
+            // 1. Calculate relative positions
+            const data = objectives.map(obj => {
+                return {
+                    id: obj.id,
+                    dx: mouse.x - obj.x, // Horizontal distance
+                    dy: mouse.y - obj.y, // Vertical distance
+                    dist: Math.sqrt(Math.pow(mouse.x - obj.x, 2) + Math.pow(mouse.y - obj.y, 2)).toFixed(2)
+                };
+            });
+
+            // 2. Send to Python (if socket is open)
+            if (socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify(data));
+            }
+
+            draw();
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw connections
+            objectives.forEach(obj => {
+                ctx.beginPath();
+                ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+                ctx.moveTo(mouse.x, mouse.y);
+                ctx.lineTo(obj.x, obj.y);
+                ctx.stroke();
+
+                // Draw Objective
+                ctx.fillStyle = obj.color;
+                ctx.beginPath();
+                ctx.arc(obj.x, obj.y, 15, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.fillStyle = "white";
+                ctx.fillText(obj.label, obj.x - 20, obj.y - 25);
+            });
+
+            // Draw User Cursor
+            ctx.fillStyle = "white";
+            ctx.beginPath();
+            ctx.arc(mouse.x, mouse.y, 8, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Run at 60fps
+        setInterval(update, 1000 / 60);
+    </script>
+</body>
+
+</html>
